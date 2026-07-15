@@ -14,7 +14,7 @@ Sound, damage, radius, and stagger are untouched. Other classes' grenades (Veter
 
 ## How it works
 
-At load it caches, then blanks, the `vfx`/`scalable_vfx` fields on the six Ogryn explosion templates. No hooks; the change is applied per-detonation by the engine, so toggling a setting takes effect immediately with no restart.
+It hooks the engine's explosion routine (`Explosion.create_husk_explosion`) and, for the six targeted Ogryn explosions, skips only the particle spawn while letting sound, damage, and everything else run untouched. It never alters the explosion templates themselves, so the game still loads every effect normally and toggling a setting takes effect immediately with no restart and no risk of a missing-particle crash.
 
 ## Install
 
