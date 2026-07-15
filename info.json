@@ -2,7 +2,7 @@
 	"identifier": "Clear Da Boom",
 	"display_name": "Clear Da Boom",
 	"description": "Removes the explosion smoke/visual cloud from the Ogryn Rumbler, Grenadier Gauntlet, and Ogryn grenades. Sound and damage unchanged.",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"author": "Wobin",
 	"dependencies": [
 		{ "id": "dmf", "name": "Darktide Mod Framework", "optional": false }

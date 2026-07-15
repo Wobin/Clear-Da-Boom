@@ -1,13 +1,13 @@
 --[[
 Name: Clear Da Boom
 Author: Wobin
-Date: 15/07/2026
-Version: 1.0.0
+Date: 16/07/2026
+Version: 1.0.1
 Repository: https://github.com/Wobin/Clear-Da-Boom
 --]]
 
 local mod = get_mod("Clear Da Boom")
-mod.version = "1.0.0"
+mod.version = "1.0.1"
 
 local SOURCES = {
 	hide_rumbler  = { "ogryn_thumper_grenade", "ogryn_thumper_grenade_instant" },
@@ -18,81 +18,69 @@ local SOURCES = {
 mod.SOURCES = SOURCES
 mod.api = mod.api or {}
 
-mod.api.build_cache = function(templates, sources, warn)
-	local cache = {}
+mod.api.build_hidden_set = function(sources, enabled_map)
+	local hidden = {}
 
-	for _, names in pairs(sources) do
-		for i = 1, #names do
-			local name = names[i]
-			local template = templates[name]
-
-			if template then
-				cache[name] = {
-					vfx          = template.vfx,
-					scalable_vfx = template.scalable_vfx,
-				}
-			elseif warn then
-				warn(name)
-			end
-		end
-	end
-
-	return cache
-end
-
-mod.api.apply = function(templates, cache, sources, enabled_map)
 	for setting_id, names in pairs(sources) do
-		local hide = enabled_map[setting_id]
-
-		for i = 1, #names do
-			local name = names[i]
-			local template = templates[name]
-			local original = cache[name]
-
-			if template and original then
-				if hide then
-					template.vfx          = nil
-					template.scalable_vfx = nil
-				else
-					template.vfx          = original.vfx
-					template.scalable_vfx = original.scalable_vfx
-				end
+		if enabled_map[setting_id] then
+			for i = 1, #names do
+				hidden[names[i]] = true
 			end
 		end
 	end
+
+	return hidden
 end
 
-local explosion_templates
-local cache
+mod.api.should_hide = function(explosion_template, hidden_set)
+	return explosion_template ~= nil and hidden_set[explosion_template.name] == true
+end
+
+mod.api.with_suppressed_vfx = function(explosion_template, call_original)
+	local saved_scalable_vfx = explosion_template.scalable_vfx
+	local saved_vfx = explosion_template.vfx
+
+	explosion_template.scalable_vfx = nil
+	explosion_template.vfx = nil
+
+	local ok, err = pcall(call_original)
+
+	explosion_template.scalable_vfx = saved_scalable_vfx
+	explosion_template.vfx = saved_vfx
+
+	if not ok then
+		error(err)
+	end
+end
+
+local hidden = {}
 
 local refresh = function()
-	if not explosion_templates then
-		return
-	end
-
-	local enabled = {
+	hidden = mod.api.build_hidden_set(SOURCES, {
 		hide_rumbler  = mod:get("hide_rumbler"),
 		hide_gauntlet = mod:get("hide_gauntlet"),
 		hide_grenades = mod:get("hide_grenades"),
-	}
-
-	mod.api.apply(explosion_templates, cache, SOURCES, enabled)
+	})
 end
 
 mod.on_all_mods_loaded = function()
 	mod:info(mod.version)
 
-	explosion_templates = require("scripts/settings/damage/explosion_templates")
-
-	if not mod._vfx_originals then
-		mod._vfx_originals = mod.api.build_cache(explosion_templates, SOURCES, function(name)
-			mod:warning("explosion template not found: %s", name)
-		end)
-	end
-
-	cache = mod._vfx_originals
-
 	refresh()
+
+	local Explosion = require("scripts/utilities/attack/explosion")
+
+	mod:hook(Explosion, "create_husk_explosion", function(func, world, physics_world, wwise_world, attacking_owner_unit_or_nil, explosion_template, position, rotation, radius_variables, charge_level)
+		if mod.api.should_hide(explosion_template, hidden) then
+			mod.api.with_suppressed_vfx(explosion_template, function()
+				func(world, physics_world, wwise_world, attacking_owner_unit_or_nil, explosion_template, position, rotation, radius_variables, charge_level)
+			end)
+
+			return
+		end
+
+		return func(world, physics_world, wwise_world, attacking_owner_unit_or_nil, explosion_template, position, rotation, radius_variables, charge_level)
+	end)
 end
 
 mod.on_setting_changed = function()
